@@ -2,9 +2,9 @@
 
 This guide walks you through setting up a comprehensive Retrieval-Augmented Generation (RAG) system using OpenWebUI, Ollama, Langfuse, RabbitMQ, and n8n. When completed, you'll have a fully functional environment for creating and querying knowledge bases with custom LLM models, complete with observability and automated document processing workflows.
 
-## ⚠️ Important Production Considerations
+## ⚠️ Important Data Considerations
 
-> **CAUTION**: The configuration described in this guide is intended for development and demonstration purposes only. It is **NOT** suitable for production environments or systems handling sensitive information.
+> **CAUTION**: The configuration described in this guide is intended for development and demonstration purposes only. Do **NOT** use this configuration for production environments or systems handling sensitive information.
 
 Before deploying this system in a production environment, you should implement proper security measures including:
 
@@ -47,7 +47,7 @@ The integration between OpenWebUI and Langfuse in this setup allows you to visua
 ## Table of Contents
 
 - [OpenWebUI RAG System Setup Guide](#openwebui-rag-system-setup-guide)
-  - [⚠️ Important Production Considerations](#️-important-production-considerations)
+  - [⚠️ Important Data Considerations](#️-important-data-considerations)
   - [Example Knowledge Base Theme](#example-knowledge-base-theme)
   - [LLM Observability with Langfuse](#llm-observability-with-langfuse)
   - [Table of Contents](#table-of-contents)
@@ -73,6 +73,18 @@ The integration between OpenWebUI and Langfuse in this setup allows you to visua
   - [Additional Notes](#additional-notes)
     - [Managing Documents in Knowledge Base](#managing-documents-in-knowledge-base)
     - [RabbitMQ's Role in Document Processing](#rabbitmqs-role-in-document-processing)
+  - [Subsystem Components and Dependencies](#subsystem-components-and-dependencies)
+    - [Open-WebUI](#open-webui)
+    - [Pipelines](#pipelines)
+    - [n8n](#n8n)
+    - [RabbitMQ](#rabbitmq)
+    - [Langfuse](#langfuse)
+    - [Langfuse Worker](#langfuse-worker)
+    - [PostgreSQL](#postgresql)
+    - [Redis](#redis)
+    - [Clickhouse](#clickhouse)
+    - [Minio](#minio)
+  - [System Dependency Chain](#system-dependency-chain)
 
 ## Prerequisites
 
@@ -369,3 +381,116 @@ RabbitMQ is a critical component in this solution because the OpenWebUI API cann
 - Document content might not be properly stored in the vector database
 
 RabbitMQ ensures that documents are queued and processed one at a time, maintaining the integrity of the indexing process and preventing API overload.
+
+## Subsystem Components and Dependencies
+
+This section provides details about each subsystem in the RAG pipeline and explains why they are needed.
+
+### Open-WebUI
+
+**Purpose**: Provides the user interface for interacting with LLMs and managing knowledge bases.
+
+**Dependencies**:
+
+- Langfuse: For observability and analytics of LLM interactions
+- Pipelines: For processing and routing LLM requests
+
+**Why it's needed**: Open-WebUI serves as the front-end interface that allows users to interact with the RAG system, create and manage knowledge bases, and configure custom models. It provides a user-friendly way to leverage the power of LLMs with RAG capabilities.
+
+### Pipelines
+
+**Purpose**: Handles the routing and processing of LLM requests, including integration with observability tools.
+
+**Dependencies**:
+
+- Langfuse: For sending telemetry data about LLM interactions
+
+**Why it's needed**: The pipelines component acts as a middleware that processes requests between the UI and the LLM. It enables features like request filtering, prompt engineering, and integration with observability tools like Langfuse.
+
+### n8n
+
+**Purpose**: Workflow automation platform for document processing and knowledge base management.
+
+**Dependencies**:
+
+- Open-WebUI: For API access to knowledge bases
+- RabbitMQ: For message queuing of document processing tasks
+
+**Why it's needed**: n8n automates the process of ingesting documents into the knowledge base. It monitors for new documents, processes them, and adds them to the appropriate knowledge base through the OpenWebUI API.
+
+### RabbitMQ
+
+**Purpose**: Message broker for asynchronous communication between components.
+
+**Why it's needed**: RabbitMQ ensures that document processing tasks are handled sequentially rather than in parallel, preventing API overload and ensuring proper document indexing. It acts as a queue that buffers document processing requests, maintaining system stability during high load.
+
+### Langfuse
+
+**Purpose**: Observability and analytics platform for LLM applications.
+
+**Dependencies**:
+
+- PostgreSQL: For storing structured metadata and configuration
+- Redis: For caching and message queuing
+- Clickhouse: For high-performance analytics storage
+- Minio: For object storage of traces and media
+
+**Why it's needed**: Langfuse provides comprehensive monitoring and analytics for LLM interactions, allowing you to track performance, costs, and quality of responses. It helps identify issues, optimise prompts, and improve the overall user experience.
+
+### Langfuse Worker
+
+**Purpose**: Background processing component of Langfuse that handles data ingestion and processing.
+
+**Dependencies**: Same as Langfuse (PostgreSQL, Redis, Clickhouse, Minio)
+
+**Why it's needed**: The worker component handles the asynchronous processing of telemetry data, ensuring that the main Langfuse service remains responsive while data is processed in the background.
+
+### PostgreSQL
+
+**Purpose**: Relational database for storing structured data.
+
+**Why it's needed**: PostgreSQL stores configuration data, user information, and structured metadata for Langfuse. It provides ACID-compliant storage for critical system data that requires relational integrity.
+
+### Redis
+
+**Purpose**: In-memory data structure store used for caching, message brokering, and temporary storage.
+
+**Why it's needed**: Redis provides high-performance caching and message queuing for Langfuse, improving system responsiveness and enabling efficient communication between components. It stores temporary data that needs to be accessed quickly and frequently.
+
+### Clickhouse
+
+**Purpose**: Column-oriented database management system for analytics workloads.
+
+**Why it's needed**: Clickhouse enables high-performance analytics on large volumes of telemetry data collected by Langfuse. Its column-oriented design makes it ideal for analytical queries on time-series data, allowing for rapid analysis of LLM performance metrics.
+
+### Minio
+
+**Purpose**: Object storage service compatible with Amazon S3 API.
+
+**Why it's needed**: Minio provides scalable object storage for Langfuse to store large volumes of trace data, media files, and other artifacts related to LLM interactions. It offers a way to persistently store data that doesn't fit well in traditional relational databases.
+
+## System Dependency Chain
+
+The complete dependency chain of the system can be summarised as follows:
+
+1. **User Interface Layer**:
+   - Open-WebUI (depends on Pipelines and Langfuse)
+
+2. **Processing Layer**:
+   - Pipelines (depends on Langfuse)
+   - n8n (depends on RabbitMQ and Open-WebUI)
+
+3. **Message Broker Layer**:
+   - RabbitMQ
+
+4. **Observability Layer**:
+   - Langfuse (depends on PostgreSQL, Redis, Clickhouse, and Minio)
+   - Langfuse Worker (depends on same components as Langfuse)
+
+5. **Storage Layer**:
+   - PostgreSQL (relational data)
+   - Redis (caching and messaging)
+   - Clickhouse (analytics data)
+   - Minio (object storage)
+
+This dependency chain ensures that all components work together seamlessly to provide a complete RAG pipeline with comprehensive observability.
